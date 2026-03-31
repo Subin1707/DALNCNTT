@@ -16,17 +16,20 @@ public class AnalysisSessionService {
     private final FraudAnalysisService fraudAnalysisService;
     private final GraphRiskService graphRiskService;
     private final AnalysisSessionRepository sessionRepository;
+    private final GraphUpdateBroadcaster graphUpdateBroadcaster;
 
     public AnalysisSessionService(
             Neo4jClient neo4j,
             FraudAnalysisService fraudAnalysisService,
             GraphRiskService graphRiskService,
-            AnalysisSessionRepository sessionRepository) {
+            AnalysisSessionRepository sessionRepository,
+            GraphUpdateBroadcaster graphUpdateBroadcaster) {
 
         this.neo4j = neo4j;
         this.fraudAnalysisService = fraudAnalysisService;
         this.graphRiskService = graphRiskService;
         this.sessionRepository = sessionRepository;
+        this.graphUpdateBroadcaster = graphUpdateBroadcaster;
     }
 
     /* =========================================================
@@ -71,6 +74,14 @@ public class AnalysisSessionService {
                                 ? List.of()
                                 : graphRisk.indicators
                 );
+
+        if (graphUpdateBroadcaster != null) {
+            graphUpdateBroadcaster.publish("graph-update", java.util.Map.of(
+                    "ts", java.time.Instant.now().toString(),
+                    "kind", "session-processed",
+                    "sessionId", sessionId
+            ));
+        }
 
         return new SessionProcessResult(sessionResult, rowResults);
     }

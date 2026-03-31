@@ -13,9 +13,11 @@ import java.util.*;
 public class GraphQueryService {
 
     private final Neo4jClient neo4j;
+    private final GraphUpdateBroadcaster graphUpdateBroadcaster;
 
-    public GraphQueryService(Neo4jClient neo4j) {
+    public GraphQueryService(Neo4jClient neo4j, GraphUpdateBroadcaster graphUpdateBroadcaster) {
         this.neo4j = neo4j;
+        this.graphUpdateBroadcaster = graphUpdateBroadcaster;
     }
 
     /* ===================================================== */
@@ -393,7 +395,17 @@ public class GraphQueryService {
                 new IllegalStateException("Node kh�ng t?n t?i ho?c �? b? x�a")
         );
 
-        return mapNode(result);
+        GraphNodeDTO out = mapNode(result);
+
+        if (graphUpdateBroadcaster != null) {
+            graphUpdateBroadcaster.publish("graph-update", Map.of(
+                    "ts", java.time.Instant.now().toString(),
+                    "kind", "node-updated",
+                    "nodeId", nodeId
+            ));
+        }
+
+        return out;
     }
 
     @Transactional("transactionManager")
@@ -416,7 +428,13 @@ public class GraphQueryService {
         .one()
         .orElseThrow(() -> new IllegalStateException("Node kh�ng t?n t?i ho?c �? b? x�a"));
 
-        // deletion executed; nothing to return
+        if (graphUpdateBroadcaster != null) {
+            graphUpdateBroadcaster.publish("graph-update", Map.of(
+                    "ts", java.time.Instant.now().toString(),
+                    "kind", "node-deleted",
+                    "nodeId", nodeId
+            ));
+        }
     }
 
     /* ===================================================== */
@@ -474,7 +492,17 @@ public class GraphQueryService {
         .one()
         .orElseThrow(() -> new IllegalStateException("Node không tồn tại hoặc đã bị xóa"));
 
-        return mapNode(result);
+        GraphNodeDTO out = mapNode(result);
+
+        if (graphUpdateBroadcaster != null) {
+            graphUpdateBroadcaster.publish("graph-update", Map.of(
+                    "ts", java.time.Instant.now().toString(),
+                    "kind", "node-blocked",
+                    "nodeId", nodeId
+            ));
+        }
+
+        return out;
     }
 
     @Transactional("transactionManager")
@@ -521,7 +549,17 @@ public class GraphQueryService {
         .one()
         .orElseThrow(() -> new IllegalStateException("Node không tồn tại hoặc đã bị xóa"));
 
-        return mapNode(result);
+        GraphNodeDTO out = mapNode(result);
+
+        if (graphUpdateBroadcaster != null) {
+            graphUpdateBroadcaster.publish("graph-update", Map.of(
+                    "ts", java.time.Instant.now().toString(),
+                    "kind", "node-unblocked",
+                    "nodeId", nodeId
+            ));
+        }
+
+        return out;
     }
 
     /* ===================================================== */

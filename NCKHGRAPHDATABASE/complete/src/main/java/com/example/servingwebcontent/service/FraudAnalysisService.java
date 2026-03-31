@@ -16,6 +16,8 @@ import java.util.regex.Pattern;
 public class FraudAnalysisService {
 
     private final Neo4jClient neo4j;
+    private final GraphUpdateBroadcaster graphUpdateBroadcaster;
+    private static final String NETWORK_SESSION_ID = "NETWORK_CAPTURE";
 
     private static final Pattern EMAIL_REGEX =
             Pattern.compile("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
@@ -213,8 +215,9 @@ public class FraudAnalysisService {
             Map.entry("system_verification_bot", 58)
     );
 
-    public FraudAnalysisService(Neo4jClient neo4j) {
+    public FraudAnalysisService(Neo4jClient neo4j, GraphUpdateBroadcaster graphUpdateBroadcaster) {
         this.neo4j = neo4j;
+        this.graphUpdateBroadcaster = graphUpdateBroadcaster;
     }
 
     /* =========================================================
@@ -290,7 +293,103 @@ public class FraudAnalysisService {
         String ipNodeId = mergeNode("IPAddress", "ip", ip, ipOut, "WIRESHARK");
         String domainNodeId = mergeNode("Domain", "domain", domain, domainOut, "WIRESHARK");
 
-        link(ipNodeId, domainNodeId, "CONNECTS_TO");
+        // Wireshark/tshark capture is continuous and not tied to a user-upload session.
+        // Create a dedicated session so the UI (session graphs) can still show these connections.
+        ensureNetworkSession();
+        linkSessionToNode(NETWORK_SESSION_ID, ipNodeId, "HAS_IP");
+        linkSessionToNode(NETWORK_SESSION_ID, domainNodeId, "HAS_DOMAIN");
+        link(ipNodeId, domainNodeId, "CONNECTS_TO", NETWORK_SESSION_ID);
+
+        if (graphUpdateBroadcaster != null) {
+            graphUpdateBroadcaster.publish("graph-update", Map.of(
+                    "ts", java.time.Instant.now().toString(),
+                    "sessionId", NETWORK_SESSION_ID,
+                    "ip", ip,
+                    "domain", domain
+            ));
+        }
+    }
+
+    /**
+     * Best-effort: record an HTTP URL visit (usually only visible for port 80).
+     * For HTTPS, you typically only get the domain (SNI) via {@link #addNetworkConnection}.
+     */
+    public void addNetworkUrlVisit(String ip, String url) {
+        if (!notBlank(ip) || !notBlank(url)) return;
+
+        OutputDTO ipOut = analyzeSingle("ip", ip);
+        OutputDTO urlOut = analyzeSingle("url", url);
+
+        String ipNodeId = mergeNode("IPAddress", "ip", ip, ipOut, "WIRESHARK");
+        String urlNodeId = mergeNode("URL", "url", url, urlOut, "WIRESHARK");
+
+        ensureNetworkSession();
+        linkSessionToNode(NETWORK_SESSION_ID, ipNodeId, "HAS_IP");
+        linkSessionToNode(NETWORK_SESSION_ID, urlNodeId, "HAS_URL");
+
+        // Reuse existing relationship type that is already included in graph queries.
+        link(ipNodeId, urlNodeId, "CONNECTS_TO", NETWORK_SESSION_ID);
+
+        // Also try to link URL -> Domain when possible
+        String host = null;
+        try {
+            String u = normalizeUrlKey(url);
+            java.net.URI uri = java.net.URI.create(u);
+            host = uri.getHost();
+        } catch (Exception ignore) {
+        }
+
+        if (notBlank(host)) {
+            OutputDTO domainOut = analyzeSingle("domain", host);
+            String domainNodeId = mergeNode("Domain", "domain", host, domainOut, "WIRESHARK");
+            linkSessionToNode(NETWORK_SESSION_ID, domainNodeId, "HAS_DOMAIN");
+            link(urlNodeId, domainNodeId, "HOSTED_ON_DOMAIN", NETWORK_SESSION_ID);
+        }
+
+        if (graphUpdateBroadcaster != null) {
+            graphUpdateBroadcaster.publish("graph-update", java.util.Map.of(
+                    "ts", java.time.Instant.now().toString(),
+                    "sessionId", NETWORK_SESSION_ID,
+                    "ip", ip,
+                    "url", url
+            ));
+        }
+    }
+
+    private void ensureNetworkSession() {
+        neo4j.query("""
+            MERGE (s:AnalysisSession {id: $sid})
+            ON CREATE SET
+                s.fileName = $fileName,
+                s.createdAt = $createdAt,
+                s.createdBy = $createdBy,
+                s.totalRows = 0,
+                s.status = 'CAPTURING',
+                s.riskLevel = 'low',
+                s.riskScore = 0,
+                s.verdict = 'AN TOÀN',
+                s.indicators = []
+            SET s.lastSeen = datetime()
+        """)
+                .bind(NETWORK_SESSION_ID).to("sid")
+                .bind("NETWORK_CAPTURE").to("fileName")
+                .bind(System.currentTimeMillis()).to("createdAt")
+                .bind("SYSTEM").to("createdBy")
+                .run();
+    }
+
+    private void linkSessionToNode(String sessionId, String nodeElementId, String relType) {
+        if (!notBlank(sessionId) || !notBlank(nodeElementId)) return;
+
+        neo4j.query("""
+            MATCH (s:AnalysisSession {id: $sid}), (n)
+            WHERE elementId(n) = $nid
+            MERGE (s)-[r:%s]->(n)
+            SET r.lastSeen = datetime()
+        """.formatted(relType))
+                .bind(sessionId).to("sid")
+                .bind(nodeElementId).to("nid")
+                .run();
     }
 
     /* =========================================================
@@ -903,6 +1002,27 @@ public class FraudAnalysisService {
         """.formatted(rel))
                 .bind(fromId).to("a")
                 .bind(toId).to("b")
+                .run();
+    }
+
+    private void link(
+            String fromId,
+            String toId,
+            String rel,
+            String sessionId) {
+
+        if (fromId == null || toId == null) return;
+
+        neo4j.query("""
+            MATCH (a),(b)
+            WHERE elementId(a)=$a AND elementId(b)=$b
+            MERGE (a)-[r:%s]->(b)
+            SET r.lastSeen = datetime(),
+                r.sessionId = $sid
+        """.formatted(rel))
+                .bind(fromId).to("a")
+                .bind(toId).to("b")
+                .bind(sessionId).to("sid")
                 .run();
     }
 

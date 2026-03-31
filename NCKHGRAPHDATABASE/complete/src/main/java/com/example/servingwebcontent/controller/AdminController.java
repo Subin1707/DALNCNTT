@@ -7,12 +7,14 @@ import com.example.servingwebcontent.repository.AnalysisSessionRepository;
 import com.example.servingwebcontent.service.*;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.util.*;
@@ -28,13 +30,15 @@ public class AdminController {
     private final AnalysisSessionRepository sessionRepository;
     private final UserService userService;   // ✅ THÊM
     private final PacketCaptureService packetCaptureService;
+    private final GraphUpdateBroadcaster graphUpdateBroadcaster;
 
     public AdminController(AnalysisSessionService analysisSessionService,
                            GraphQueryService graphService,
                            ExcelImportService excelImportService,
                            AnalysisSessionRepository sessionRepository,
                            UserService userService,
-                           PacketCaptureService packetCaptureService) {  // ✅ THÊM
+                           PacketCaptureService packetCaptureService,
+                           GraphUpdateBroadcaster graphUpdateBroadcaster) {  // ✅ THÊM
 
         this.analysisSessionService = analysisSessionService;
         this.graphService = graphService;
@@ -42,6 +46,7 @@ public class AdminController {
         this.sessionRepository = sessionRepository;
         this.userService = userService;     // ✅ THÊM
         this.packetCaptureService = packetCaptureService;
+        this.graphUpdateBroadcaster = graphUpdateBroadcaster;
     }
 
     /* ================= DASHBOARD ================= */
@@ -245,8 +250,24 @@ public class AdminController {
                 "totalLines", packetCaptureService.getTotalLines(),
                 "totalRecords", packetCaptureService.getTotalRecords(),
                 "totalSaved", packetCaptureService.getTotalSaved(),
-                "lastSavedAt", packetCaptureService.getLastSavedAt()
+                "lastSavedAt", packetCaptureService.getLastSavedAt(),
+                "recentEvents", packetCaptureService.getRecentEvents()
         );
+    }
+
+    @GetMapping("/wireshark-events")
+    @ResponseBody
+    public Object getWiresharkEvents(HttpSession session) {
+        getAdmin(session);
+        return packetCaptureService.getRecentEvents();
+    }
+
+    /* ================= REALTIME UPDATES (SSE) ================= */
+    @GetMapping(value = "/stream/graph", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @ResponseBody
+    public SseEmitter streamGraphUpdates(HttpSession session) {
+        getAdmin(session);
+        return graphUpdateBroadcaster.subscribe();
     }
 
     /* ================= USER API (ADMIN) ================= */
@@ -504,5 +525,3 @@ public String logout(HttpSession session) {
     if (session != null) session.invalidate();
     return "redirect:/login";
 }}
-
-

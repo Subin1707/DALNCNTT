@@ -21,7 +21,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let abortController = null;
     const graphCache = new Map();
-    const AUTO_REFRESH_MS = 3000;
+    // SSE will trigger instant updates; keep polling only as a fallback.
+    const AUTO_REFRESH_MS = 10000;
     let autoRefreshTimer = null;
     let graphInitialized = false;
     let container = null;
@@ -31,6 +32,10 @@ document.addEventListener("DOMContentLoaded", () => {
     let zoom = null;
     let prevAllNodeIds = new Set();
     let didInitialFit = false;
+    let autoLockInterval = null;
+    let lastRenderedSessionId = null;
+    let isFetchingGraph = false;
+    let autoRefreshTick = 0;
 
     /* ================= UTIL ================= */
 
@@ -93,6 +98,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!sel) return;
 
         try {
+            const prevValue = sel.value;
             const res = await fetch("/admin/sessions");
             if (!res.ok) return;
 
@@ -116,6 +122,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 sel.appendChild(opt);
             });
 
+            // keep current selection if still exists
+            if (prevValue) {
+                const exists = Array.from(sel.options).some(o => o.value === prevValue);
+                if (exists) sel.value = prevValue;
+            }
+
         } catch (e) {
             console.warn("Fetch sessions failed", e);
         }
@@ -127,13 +139,26 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function fetchGraph(sessionId = null, options = {}) {
 
-    const { force = false } = options;
+    const {
+        force = false,
+        // Auto-refresh should not abort in-flight requests; large graphs can take > interval.
+        skipIfBusy = false,
+        allowAbort = true
+    } = options;
 
     // Chuẩn hóa sessionId
     currentSessionId = sessionId ? String(sessionId) : "ALL";
 
+    // Khi chuyá»ƒn session -> cáº§n fit láº¡i cho graph má»›i
+    if (currentSessionId !== lastRenderedSessionId) {
+        didInitialFit = false;
+        lastRenderedSessionId = currentSessionId;
+    }
+
+    if (skipIfBusy && isFetchingGraph) return;
+
     // Abort request cũ (nếu có) và tạo controller mới cho request hiện tại
-    if (abortController) abortController.abort();
+    if (allowAbort && abortController) abortController.abort();
     abortController = new AbortController();
 
     // Nếu ALL mode -> gọi endpoint trả toàn bộ graph
@@ -142,6 +167,7 @@ async function fetchGraph(sessionId = null, options = {}) {
 
         try {
             showLoading(true);
+            isFetchingGraph = true;
             const res = await fetch(url, { signal: abortController.signal });
             if (!res.ok) throw new Error(`Graph API failed: ${res.status}`);
             const data = await res.json();
@@ -163,6 +189,7 @@ async function fetchGraph(sessionId = null, options = {}) {
             }
             return;
         } finally {
+            isFetchingGraph = false;
             showLoading(false);
         }
     }
@@ -177,6 +204,7 @@ async function fetchGraph(sessionId = null, options = {}) {
     }
 
     showLoading(true);
+    isFetchingGraph = true;
 
     try {
 
@@ -210,6 +238,7 @@ async function fetchGraph(sessionId = null, options = {}) {
         }
 
     } finally {
+        isFetchingGraph = false;
         showLoading(false);
     }
 }
@@ -221,10 +250,14 @@ window.fetchGraph = fetchGraph;
     function startAutoRefresh() {
         if (autoRefreshTimer) return;
         autoRefreshTimer = setInterval(() => {
+            autoRefreshTick++;
             const sid = currentSessionId && currentSessionId !== "ALL"
                 ? currentSessionId
                 : null;
-            fetchGraph(sid, { force: true });
+            fetchGraph(sid, { force: true, skipIfBusy: true, allowAbort: false });
+
+            // refresh session dropdown periodically (e.g. NETWORK_CAPTURE appears after tshark starts)
+            if (autoRefreshTick % 10 === 0) fetchSessions();
         }, AUTO_REFRESH_MS);
     }
 
@@ -275,8 +308,9 @@ window.fetchGraph = fetchGraph;
 
             simulation = d3.forceSimulation()
                 .force("link", d3.forceLink().id(d => d.id).distance(120))
-                .force("charge", d3.forceManyBody().strength(-350))
-                .force("center", d3.forceCenter(width / 2, height / 2));
+                .force("charge", d3.forceManyBody().strength(-500))
+                .force("center", d3.forceCenter(width / 2, height / 2))
+                .force("collision", d3.forceCollide().radius(nodeRadius + 10).iterations(2));
 
             linkSel = container.append("g").selectAll("line");
             nodeSel = container.append("g").selectAll("circle");
@@ -310,29 +344,49 @@ window.fetchGraph = fetchGraph;
             });
         });
 
+        const reusedCount = nodes.reduce((c, n) => c + (prevPos.has(n.id) ? 1 : 0), 0);
+        const reusedRatio = reusedCount / Math.max(1, nodes.length);
+        const isFreshGraph = prevPos.size === 0 || reusedRatio < 0.25;
+
         let cx = width / 2;
         let cy = height / 2;
-        if (prevPos.size > 0) {
+        if (!isFreshGraph && prevPos.size > 0) {
             let sx = 0, sy = 0;
             prevPos.forEach(p => { sx += p.x || 0; sy += p.y || 0; });
             cx = sx / prevPos.size;
             cy = sy / prevPos.size;
         }
 
-        nodes.forEach(n => {
-            const p = prevPos.get(n.id);
-            if (p) {
-                n.x = p.x;
-                n.y = p.y;
-                n.vx = p.vx;
-                n.vy = p.vy;
-                if (p.fx != null) n.fx = p.fx;
-                if (p.fy != null) n.fy = p.fy;
-            } else {
-                n.x = cx + (Math.random() - 0.5) * 40;
-                n.y = cy + (Math.random() - 0.5) * 40;
-            }
-        });
+        if (isFreshGraph) {
+            // Nhiá»u node má»›i (vd: upload Excel / Ä‘á»•i session) -> seed vá»‹ trĂ­ theo spiral Ä‘á»ƒ khĂ´ng chĂ´ng lĂªn nhau
+            const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+            const spacing = nodeRadius * 5.5;
+
+            nodes.forEach((n, i) => {
+                n.fx = null;
+                n.fy = null;
+                const r = Math.sqrt(i) * spacing;
+                const a = i * goldenAngle;
+                n.x = width / 2 + r * Math.cos(a);
+                n.y = height / 2 + r * Math.sin(a);
+            });
+        } else {
+            const jitter = 80;
+            nodes.forEach(n => {
+                const p = prevPos.get(n.id);
+                if (p) {
+                    n.x = p.x;
+                    n.y = p.y;
+                    n.vx = p.vx;
+                    n.vy = p.vy;
+                    if (p.fx != null) n.fx = p.fx;
+                    if (p.fy != null) n.fy = p.fy;
+                } else {
+                    n.x = cx + (Math.random() - 0.5) * jitter;
+                    n.y = cy + (Math.random() - 0.5) * jitter;
+                }
+            });
+        }
 
         const linkKey = l => `${safeId(l.source)}->${safeId(l.target)}::${l.type || ""}`;
 
@@ -345,6 +399,11 @@ window.fetchGraph = fetchGraph;
                 SENT_FROM_IP: "#c62828",
                 CONTAINS_URL: "#f9a825",
                 HOSTED_ON: "#2e7d32",
+                HOSTED_ON_DOMAIN: "#2e7d32",
+                RESOLVES_TO: "#6d4c41",
+                DOWNLOADS: "#5e35b1",
+                HAS_HASH: "#6a1b9a",
+                RECEIVED: "#546e7a",
                 CONNECTS_TO: "#00838f"
             }[d.type] || "#aaa"));
 
@@ -396,10 +455,29 @@ window.fetchGraph = fetchGraph;
 
         simulation.nodes(nodes);
         simulation.force("link").links(links);
-        simulation.alpha(0.2).restart();
+        simulation.alpha(isFreshGraph ? 1 : 0.25).restart();
 
-        // Lock nodes in place after initial settle so they don't drift
-        setTimeout(() => {
+        // Auto-lock sau khi layout dá»«ng Ä‘á»§ lĂ¢u (trĂ¡nh lock quĂ¡ sớm lĂ m node chĂ´ng lĂªn nhau)
+        if (autoLockInterval) {
+            clearInterval(autoLockInterval);
+            autoLockInterval = null;
+        }
+
+        const lockStart = Date.now();
+        const maxWaitMs = isFreshGraph ? 3500 : 1200;
+        autoLockInterval = setInterval(() => {
+            if (!simulation) {
+                clearInterval(autoLockInterval);
+                autoLockInterval = null;
+                return;
+            }
+
+            const elapsed = Date.now() - lockStart;
+            if (simulation.alpha() > 0.08 && elapsed < maxWaitMs) return;
+
+            clearInterval(autoLockInterval);
+            autoLockInterval = null;
+
             nodes.forEach(n => {
                 if (n.fx == null && n.fy == null) {
                     n.fx = n.x;
@@ -407,7 +485,7 @@ window.fetchGraph = fetchGraph;
                 }
             });
             simulation.alphaTarget(0);
-        }, 300);
+        }, 200);
 
         // Focus view on newest nodes (if any)
         const newNodes = nodes.filter(n => n._isNew);
@@ -1017,6 +1095,40 @@ startAutoRefresh();
 
 // Auto-load ALL graph on startup so it keeps updating from Wireshark
 fetchGraph(null, { force: true });
+
+// Near real-time updates (Server-Sent Events): refresh immediately when server receives new capture
+(() => {
+    if (typeof window.EventSource !== "function") return;
+
+    let pending = false;
+    let timer = null;
+
+    const scheduleRefresh = () => {
+        if (pending) return;
+        pending = true;
+
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+            pending = false;
+            const sid = currentSessionId && currentSessionId !== "ALL"
+                ? currentSessionId
+                : null;
+            fetchGraph(sid, { force: true, skipIfBusy: true, allowAbort: false });
+        }, 250);
+    };
+
+    try {
+        const es = new EventSource("/admin/stream/graph");
+        es.addEventListener("graph-update", scheduleRefresh);
+        es.addEventListener("update", scheduleRefresh);
+        es.addEventListener("hello", () => {});
+        es.onerror = () => {
+            // browser will auto-reconnect; keep silent
+        };
+    } catch (e) {
+        console.warn("SSE unavailable", e);
+    }
+})();
 
 document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") startAutoRefresh();

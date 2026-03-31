@@ -2,6 +2,7 @@
 <html lang="vi" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Customer Dashboard</title>
 
     <!-- FIX: đúng css customer -->
@@ -80,9 +81,9 @@
             Biểu diễn mối quan hệ Email – URL – IP trong hệ thống
         </p>
 
-        <div style="display:flex;gap:10px;align-items:center;margin:10px 0;">
+        <div class="graph-controls">
             <label for="sessionSelect"><b>Phiên:</b></label>
-            <select id="sessionSelect" style="min-width:380px;padding:8px">
+            <select id="sessionSelect" style="min-width:380px">
                 <option value="">ALL SESSIONS</option>
             </select>
 

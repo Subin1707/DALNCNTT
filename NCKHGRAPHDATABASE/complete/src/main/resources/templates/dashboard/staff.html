@@ -2,6 +2,7 @@
 <html lang="vi" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Staff Dashboard</title>
 
     <!-- FIX: đúng css staff -->
@@ -82,9 +83,9 @@
             Biểu diễn mối quan hệ Email – URL – IP trong hệ thống
         </p>
 
-        <div class="graph-controls" style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+        <div class="graph-controls">
             <label for="sessionSelect"><b>Phiên:</b></label>
-            <select id="sessionSelect" style="min-width:300px;padding:6px"></select>
+            <select id="sessionSelect" style="min-width:300px"></select>
             <button id="reloadGraphBtn" type="button">Tải lại</button>
             <span id="graphLoading" style="display:none;margin-left:8px">Loading...</span>
         </div>
