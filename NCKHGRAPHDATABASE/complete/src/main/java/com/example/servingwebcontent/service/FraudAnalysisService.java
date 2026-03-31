@@ -344,6 +344,61 @@ public class FraudAnalysisService {
     }
 
     /* =========================================================
+       MANUAL BLOCK (DB)
+       ========================================================= */
+
+    private static class ManualBlockInfo {
+        final String reason;
+        final String blockedBy;
+
+        ManualBlockInfo(String reason, String blockedBy) {
+            this.reason = reason;
+            this.blockedBy = blockedBy;
+        }
+    }
+
+    private ManualBlockInfo findManualBlock(String label,
+                                            String property,
+                                            String normalizedValue,
+                                            boolean lowerCompare) {
+
+        if (normalizedValue == null || normalizedValue.isBlank()) return null;
+
+        String cypher = lowerCompare
+                ? """
+                    MATCH (n:%s)
+                    WHERE toLower(n.%s) = $val
+                      AND coalesce(n.manualBlocked,false) = true
+                      AND coalesce(n.deleted,false) = false
+                    RETURN coalesce(n.manualBlockReason,'') AS reason,
+                           coalesce(n.manualBlockedBy,'') AS blockedBy
+                    LIMIT 1
+                """.formatted(label, property)
+                : """
+                    MATCH (n:%s {%s:$val})
+                    WHERE coalesce(n.manualBlocked,false) = true
+                      AND coalesce(n.deleted,false) = false
+                    RETURN coalesce(n.manualBlockReason,'') AS reason,
+                           coalesce(n.manualBlockedBy,'') AS blockedBy
+                    LIMIT 1
+                """.formatted(label, property);
+
+        String bindVal = lowerCompare
+                ? normalizedValue.trim().toLowerCase()
+                : normalizedValue.trim();
+
+        return neo4j.query(cypher)
+                .bind(bindVal).to("val")
+                .fetch()
+                .one()
+                .map(m -> new ManualBlockInfo(
+                        String.valueOf(m.getOrDefault("reason", "")),
+                        String.valueOf(m.getOrDefault("blockedBy", ""))
+                ))
+                .orElse(null);
+    }
+
+    /* =========================================================
        EMAIL
        ========================================================= */
 
@@ -353,6 +408,15 @@ public class FraudAnalysisService {
             return NodeRisk.absent();
 
         String emailKey = email.trim().toLowerCase();
+        ManualBlockInfo emailBlock = findManualBlock("Email", "email", emailKey, true);
+        if (emailBlock != null) {
+            NodeRisk r = NodeRisk.valid();
+            String msg = "Manual block"
+                    + (emailBlock.reason != null && !emailBlock.reason.isBlank() ? (": " + emailBlock.reason) : "")
+                    + (emailBlock.blockedBy != null && !emailBlock.blockedBy.isBlank() ? (" (" + emailBlock.blockedBy + ")") : "");
+            r.add(100, msg);
+            return r.normalize();
+        }
         NodeRisk override = overrideScore(EMAIL_SCORE_OVERRIDES.get(emailKey), "Manual override");
         if (override != null) return override;
 
@@ -389,13 +453,22 @@ public class FraudAnalysisService {
             return NodeRisk.absent();
 
         String ipKey = ip.trim();
+        ManualBlockInfo ipBlock = findManualBlock("IPAddress", "ip", ipKey, false);
+        if (ipBlock != null) {
+            NodeRisk r = NodeRisk.valid();
+            String msg = "Manual block"
+                    + (ipBlock.reason != null && !ipBlock.reason.isBlank() ? (": " + ipBlock.reason) : "")
+                    + (ipBlock.blockedBy != null && !ipBlock.blockedBy.isBlank() ? (" (" + ipBlock.blockedBy + ")") : "");
+            r.add(100, msg);
+            return r.normalize();
+        }
         NodeRisk override = overrideScore(IP_SCORE_OVERRIDES.get(ipKey), "Manual override");
         if (override != null) return override;
 
         ip = ipKey;
 
         if (!IPV4_REGEX.matcher(ip).matches() && !IPV6_REGEX.matcher(ip).matches())
-            return NodeRisk.invalid("IP kh�ng h?p l?");
+            return NodeRisk.invalid("IP không hợp lệ");
 
         NodeRisk r = NodeRisk.valid();
 
@@ -418,6 +491,15 @@ public class FraudAnalysisService {
             return NodeRisk.absent();
 
         String urlKey = normalizeUrlKey(url);
+        ManualBlockInfo urlBlock = findManualBlock("URL", "url", urlKey, true);
+        if (urlBlock != null) {
+            NodeRisk r = NodeRisk.valid();
+            String msg = "Manual block"
+                    + (urlBlock.reason != null && !urlBlock.reason.isBlank() ? (": " + urlBlock.reason) : "")
+                    + (urlBlock.blockedBy != null && !urlBlock.blockedBy.isBlank() ? (" (" + urlBlock.blockedBy + ")") : "");
+            r.add(100, msg);
+            return r.normalize();
+        }
         NodeRisk override = overrideScore(URL_SCORE_OVERRIDES.get(urlKey), "Manual override");
         if (override != null) return override;
 
@@ -500,6 +582,15 @@ public class FraudAnalysisService {
             return NodeRisk.absent();
 
         String domainKey = domain.trim().toLowerCase();
+        ManualBlockInfo domainBlock = findManualBlock("Domain", "domain", domainKey, true);
+        if (domainBlock != null) {
+            NodeRisk r = NodeRisk.valid();
+            String msg = "Manual block"
+                    + (domainBlock.reason != null && !domainBlock.reason.isBlank() ? (": " + domainBlock.reason) : "")
+                    + (domainBlock.blockedBy != null && !domainBlock.blockedBy.isBlank() ? (" (" + domainBlock.blockedBy + ")") : "");
+            r.add(100, msg);
+            return r.normalize();
+        }
         NodeRisk override = overrideScore(DOMAIN_SCORE_OVERRIDES.get(domainKey), "Manual override");
         if (override != null) return override;
 
@@ -557,6 +648,15 @@ public class FraudAnalysisService {
             return NodeRisk.absent();
 
         String hashKey = hash.trim().toLowerCase();
+        ManualBlockInfo hashBlock = findManualBlock("FileHash", "hash", hashKey, true);
+        if (hashBlock != null) {
+            NodeRisk r = NodeRisk.valid();
+            String msg = "Manual block"
+                    + (hashBlock.reason != null && !hashBlock.reason.isBlank() ? (": " + hashBlock.reason) : "")
+                    + (hashBlock.blockedBy != null && !hashBlock.blockedBy.isBlank() ? (" (" + hashBlock.blockedBy + ")") : "");
+            r.add(100, msg);
+            return r.normalize();
+        }
         NodeRisk override = overrideScore(FILE_HASH_SCORE_OVERRIDES.get(hashKey), "Manual override");
         if (override != null) return override;
 
@@ -583,6 +683,15 @@ public class FraudAnalysisService {
             return NodeRisk.absent();
 
         String name = fileNode.trim().toLowerCase();
+        ManualBlockInfo fileBlock = findManualBlock("File", "fileName", name, true);
+        if (fileBlock != null) {
+            NodeRisk r = NodeRisk.valid();
+            String msg = "Manual block"
+                    + (fileBlock.reason != null && !fileBlock.reason.isBlank() ? (": " + fileBlock.reason) : "")
+                    + (fileBlock.blockedBy != null && !fileBlock.blockedBy.isBlank() ? (" (" + fileBlock.blockedBy + ")") : "");
+            r.add(100, msg);
+            return r.normalize();
+        }
         NodeRisk override = overrideScore(FILE_NODE_SCORE_OVERRIDES.get(name), "Manual override");
         if (override != null) return override;
 
@@ -636,6 +745,15 @@ public class FraudAnalysisService {
             return NodeRisk.absent();
 
         String victimKey = victim.trim().toLowerCase();
+        ManualBlockInfo victimBlock = findManualBlock("VictimAccount", "username", victimKey, true);
+        if (victimBlock != null) {
+            NodeRisk r = NodeRisk.valid();
+            String msg = "Manual block"
+                    + (victimBlock.reason != null && !victimBlock.reason.isBlank() ? (": " + victimBlock.reason) : "")
+                    + (victimBlock.blockedBy != null && !victimBlock.blockedBy.isBlank() ? (" (" + victimBlock.blockedBy + ")") : "");
+            r.add(100, msg);
+            return r.normalize();
+        }
         NodeRisk override = overrideScore(ACCOUNT_SCORE_OVERRIDES.get(victimKey), "Manual override");
         if (override != null) return override;
 

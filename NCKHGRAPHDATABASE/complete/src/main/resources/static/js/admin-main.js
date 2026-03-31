@@ -610,6 +610,17 @@ if (riskRank(normalizedRisk) > riskRank(s.maxRisk))
                     <code class="node-popup-id-value">${d.id || "—"}</code>
                 </div>
 
+                ${d.manualBlocked ? `
+                <div class="node-popup-id-section">
+                    <div class="node-popup-label">Manual Block</div>
+                    <div class="node-popup-value">
+                        <b>YES</b>
+                        ${d.manualBlockReason ? ` - ${d.manualBlockReason}` : ""}
+                        ${d.manualBlockedBy ? ` (${d.manualBlockedBy})` : ""}
+                    </div>
+                </div>
+                ` : ""}
+
                 <!-- Indicators -->
                 <div class="node-popup-indicators">
                     <div class="node-popup-label">Risk Indicators</div>
@@ -620,6 +631,9 @@ if (riskRank(normalizedRisk) > riskRank(s.maxRisk))
 
                 <!-- Actions -->
                 <div class="node-popup-footer">
+                    ${(String(d.type || "").toLowerCase() !== "analysissession")
+                        ? `<button class="node-popup-btn-block" type="button">${d.manualBlocked ? "Bỏ chặn" : "Chặn"}</button>`
+                        : ""}
                     <button class="node-popup-btn-close" type="button">Close</button>
                 </div>
             </div>
@@ -629,6 +643,65 @@ if (riskRank(normalizedRisk) > riskRank(s.maxRisk))
         if (closeBtn) {
             closeBtn.onclick = () => {
                 box.style.display = "none";
+            };
+        }
+
+        const blockBtn = box.querySelector(".node-popup-btn-block");
+        if (blockBtn) {
+            blockBtn.onclick = async () => {
+                const id = d.id;
+                if (!id) return;
+
+                const isBlocked = !!d.manualBlocked;
+
+                if (!isBlocked) {
+                    const reason = prompt("Lý do chặn (tuỳ chọn):", d.manualBlockReason || "");
+                    if (reason === null) return;
+
+                    try {
+                        const res = await fetch(`/admin/node/${encodeURIComponent(id)}/block`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ reason })
+                        });
+
+                        const j = await res.json().catch(() => ({}));
+                        if (!res.ok) throw new Error(j.message || `HTTP ${res.status}`);
+
+                        if (j.node) updateNodeInCaches(id, () => j.node);
+                        box.style.display = "none";
+                        await fetchGraph(currentSessionId === "ALL" ? null : currentSessionId, { force: true });
+                        alert("Chặn thành công");
+
+                    } catch (e) {
+                        console.error("Block node failed:", e);
+                        alert("Chặn thất bại: " + (e.message || e));
+                        await fetchGraph(currentSessionId === "ALL" ? null : currentSessionId, { force: true });
+                    }
+
+                    return;
+                }
+
+                if (!confirm("Bỏ chặn node này?")) return;
+
+                try {
+                    const res = await fetch(`/admin/node/${encodeURIComponent(id)}/unblock`, {
+                        method: "POST"
+                    });
+
+                    const j = await res.json().catch(() => ({}));
+                    if (!res.ok) throw new Error(j.message || `HTTP ${res.status}`);
+
+                    if (j.node) updateNodeInCaches(id, () => j.node);
+                    box.style.display = "none";
+                    await fetchGraph(currentSessionId === "ALL" ? null : currentSessionId, { force: true });
+                    alert("Bỏ chặn thành công");
+
+                } catch (e) {
+                    console.error("Unblock node failed:", e);
+                    alert("Bỏ chặn thất bại: " + (e.message || e));
+                    await fetchGraph(currentSessionId === "ALL" ? null : currentSessionId, { force: true });
+                }
             };
         }
     }
@@ -720,6 +793,69 @@ if (riskRank(normalizedRisk) > riskRank(s.maxRisk))
             editBtn.style.marginLeft = "6px";
             editBtn.onclick = () => openNodeEditModal(n);
             act.appendChild(editBtn);
+
+            // Manual block / unblock (not for sessions)
+            if (String(n.type || "").toLowerCase() !== "analysissession") {
+                const blockBtn = document.createElement("button");
+                blockBtn.textContent = n.manualBlocked ? "Bỏ chặn" : "Chặn";
+                blockBtn.style.marginLeft = "6px";
+
+                blockBtn.onclick = async () => {
+                    const id = n.id;
+                    if (!id) return;
+
+                    const isBlocked = !!n.manualBlocked;
+
+                    if (!isBlocked) {
+                        const reason = prompt("Lý do chặn (tuỳ chọn):", n.manualBlockReason || "");
+                        if (reason === null) return;
+
+                        try {
+                            const res = await fetch(`/admin/node/${encodeURIComponent(id)}/block`, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ reason })
+                            });
+
+                            const j = await res.json().catch(() => ({}));
+                            if (!res.ok) throw new Error(j.message || `HTTP ${res.status}`);
+
+                            if (j.node) updateNodeInCaches(id, () => j.node);
+                            await fetchGraph(currentSessionId === "ALL" ? null : currentSessionId, { force: true });
+                            alert("Chặn thành công");
+
+                        } catch (e) {
+                            console.error("Block node failed:", e);
+                            alert("Chặn thất bại: " + (e.message || e));
+                            await fetchGraph(currentSessionId === "ALL" ? null : currentSessionId, { force: true });
+                        }
+
+                        return;
+                    }
+
+                    if (!confirm("Bỏ chặn node này?")) return;
+
+                    try {
+                        const res = await fetch(`/admin/node/${encodeURIComponent(id)}/unblock`, {
+                            method: "POST"
+                        });
+
+                        const j = await res.json().catch(() => ({}));
+                        if (!res.ok) throw new Error(j.message || `HTTP ${res.status}`);
+
+                        if (j.node) updateNodeInCaches(id, () => j.node);
+                        await fetchGraph(currentSessionId === "ALL" ? null : currentSessionId, { force: true });
+                        alert("Bỏ chặn thành công");
+
+                    } catch (e) {
+                        console.error("Unblock node failed:", e);
+                        alert("Bỏ chặn thất bại: " + (e.message || e));
+                        await fetchGraph(currentSessionId === "ALL" ? null : currentSessionId, { force: true });
+                    }
+                };
+
+                act.appendChild(blockBtn);
+            }
 
             const delBtn = document.createElement("button");
             delBtn.textContent = "Xóa";

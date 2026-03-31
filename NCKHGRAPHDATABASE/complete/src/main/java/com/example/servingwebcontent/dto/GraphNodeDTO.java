@@ -18,12 +18,18 @@ public class GraphNodeDTO {
     private List<String> indicators;
     private String source;
 
+    private boolean manualBlocked;
+    private String manualBlockReason;
+    private String manualBlockedBy;
+    private String manualBlockedAt;
+
     public GraphNodeDTO() {
         this.status = "valid";
         this.riskLevel = "low";
         this.riskScore = 0;
         this.verdict = "AN TOÀN";
         this.indicators = new ArrayList<>();
+        this.manualBlocked = false;
     }
 
     public GraphNodeDTO(String id,
@@ -66,6 +72,34 @@ public class GraphNodeDTO {
         this.verdict = normalizeVerdict(verdict, this.status);
 
         this.source = normalize(source);
+
+        this.manualBlocked = false;
+        this.manualBlockReason = null;
+        this.manualBlockedBy = null;
+        this.manualBlockedAt = null;
+    }
+
+    public GraphNodeDTO(String id,
+                        String sessionId,
+                        String type,
+                        String value,
+                        String status,
+                        String riskLevel,
+                        Integer riskScore,
+                        String verdict,
+                        List<String> indicators,
+                        String source,
+                        Boolean manualBlocked,
+                        String manualBlockReason,
+                        String manualBlockedBy,
+                        String manualBlockedAt) {
+
+        this(id, sessionId, type, value, status, riskLevel, riskScore, verdict, indicators, source);
+
+        this.manualBlocked = manualBlocked != null && manualBlocked;
+        this.manualBlockReason = normalize(manualBlockReason);
+        this.manualBlockedBy = normalize(manualBlockedBy);
+        this.manualBlockedAt = normalize(manualBlockedAt);
     }
 
     /* ================= NORMALIZE ================= */
@@ -214,5 +248,21 @@ public class GraphNodeDTO {
 
     public String getSource() {
         return source;
+    }
+
+    public boolean isManualBlocked() {
+        return manualBlocked;
+    }
+
+    public String getManualBlockReason() {
+        return manualBlockReason;
+    }
+
+    public String getManualBlockedBy() {
+        return manualBlockedBy;
+    }
+
+    public String getManualBlockedAt() {
+        return manualBlockedAt;
     }
 }

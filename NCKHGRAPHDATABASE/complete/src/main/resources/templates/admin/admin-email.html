@@ -11,12 +11,10 @@
 
 <main class="container">
 
-    <!-- HEADER -->
     <header class="dashboard-header">
         <div>
             <h1>Quản lý Email</h1>
 
-            <!-- ✅ FIX: hiển thị user nếu có -->
             <p th:if="${user != null}">
                 Chào <strong th:text="${user.email}"></strong>
                 (Role: <span th:text="${user.role}"></span>)
@@ -30,21 +28,22 @@
         <a th:href="@{/admin/logout}" class="logout-btn" title="Đăng xuất">Logout</a>
     </header>
 
-    <!-- NAV -->
     <div class="nav-buttons">
         <button onclick="window.location.href='/dashboard'" title="Trang chính">Dashboard</button>
         <button onclick="window.location.href='/admin/admin-email'" title="Quản lý Email">Quản lý Email</button>
         <button onclick="window.location.href='/admin/admin-ip'" title="Quản lý IP">Quản lý IP Address</button>
         <button onclick="window.location.href='/admin/admin-url'" title="Quản lý URL">Quản lý URL</button>
+        <button onclick="window.location.href='/admin/admin-domain'" title="Quản lý Domain">Quản lý Domain</button>
+        <button onclick="window.location.href='/admin/admin-file'" title="Quản lý File name">Quản lý File name</button>
+        <button onclick="window.location.href='/admin/admin-filehash'" title="Quản lý File hash">Quản lý File hash</button>
+        <button onclick="window.location.href='/admin/admin-victim'" title="Quản lý Victim account">Quản lý Victim account</button>
         <button onclick="window.location.href='/admin/user-management'" title="Quản lý Tài khoản">Quản lý Tài khoản</button>
         <button onclick="window.location.href='/admin/about'" title="Thông tin nhà phát triển">Giới thiệu Nhà phát triển</button>
     </div>
 
-    <!-- FRAUD ANALYSIS -->
     <section class="card">
         <h2>Phân tích Email</h2>
 
-        <!-- ✅ FIX: onsubmit return false OK -->
         <form class="form-inline" onsubmit="return false;">
             <input type="email" id="analyzeEmail"
                    placeholder="Nhập Email cần phân tích"
@@ -56,11 +55,9 @@
             </button>
         </form>
 
-        <!-- ✅ FIX: class cho đẹp + đồng bộ -->
         <div id="analyzeResult" class="analyze-result"></div>
     </section>
 
-    <!-- GRAPH -->
     <section class="card">
         <h2>Đồ thị Email</h2>
 
@@ -70,13 +67,11 @@
             <span id="graphLoading" style="display:none;margin-left:8px">Loading...</span>
         </div>
 
-        <!-- ✅ FIX: bọc wrapper tránh bị tràn -->
         <div class="graph-wrapper">
             <svg id="graphSVG" width="1000" height="600"></svg>
         </div>
     </section>
 
-    <!-- NODE INFO & TABLE -->
     <div id="nodeInfo"></div>
 
     <section class="card">
@@ -86,7 +81,6 @@
             <input type="text" id="searchNode"
                    placeholder="Tìm theo ID hoặc Value..."
                    autocomplete="off">
-
             <button type="button" id="searchNodeBtn">Tìm kiếm</button>
             <button type="button" id="resetNodeBtn">Reset</button>
         </div>
@@ -106,7 +100,6 @@
                     <th>Actions</th>
                 </tr>
                 </thead>
-
                 <tbody></tbody>
             </table>
         </div>
@@ -134,24 +127,20 @@
 
 </main>
 
-<!-- ✅ FIX: gắn view type để admin-main.js lọc node đúng -->
 <script>
     window.ADMIN_VIEW_TYPE = "Email";
 </script>
 
-<!-- ✅ FIX: LOAD ORDER CHUẨN -->
 <script th:src="@{/js/admin-main.js}"></script>
 <script th:src="@{/js/admin-session.js}"></script>
 <script th:src="@{/js/admin-email-analyze.js}"></script>
 
-<!-- ✅ FIX: Enter để search -->
 <script>
     document.getElementById("searchNode")?.addEventListener("keypress", (e) => {
-        if (e.key === "Enter") {
-            document.getElementById("searchNodeBtn")?.click();
-        }
+        if (e.key === "Enter") document.getElementById("searchNodeBtn")?.click();
     });
 </script>
 
 </body>
 </html>
+

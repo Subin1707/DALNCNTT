@@ -16,11 +16,11 @@
         <div>
             <h1>URL Management</h1>
             <p th:if="${user != null}">
-                Chào <strong th:text="${user.email}"></strong>
+                Ch�o <strong th:text="${user.email}"></strong>
                 (Role: <span th:text="${user.role}"></span>)
             </p>
             <p th:if="${user == null}" class="warning">
-                ⚠ Chưa đăng nhập
+                ? Ch�a ��ng nh?p
             </p>
         </div>
 
@@ -29,42 +29,42 @@
 
     <div class="nav-buttons">
         <button type="button" onclick="window.location.href='/dashboard'">Dashboard</button>
-        <button type="button" onclick="window.location.href='/staff/staff-email'">Quản lý Email</button>
-        <button type="button" onclick="window.location.href='/staff/staff-ip'">Quản lý IP Address</button>
-        <button type="button" onclick="window.location.href='/staff/staff-url'">Quản lý URL</button>
-        <button type="button" onclick="window.location.href='/staff/about'">Giới thiệu Nhà phát triển</button>
+        <button type="button" onclick="window.location.href='/staff/staff-email'">Qu?n l? Email</button>
+        <button type="button" onclick="window.location.href='/staff/staff-ip'">Qu?n l? IP Address</button>
+        <button type="button" onclick="window.location.href='/staff/staff-url'">Qu?n l? URL</button>
+        <button type="button" onclick="window.location.href='/staff/about'">Gi?i thi?u Nh� ph�t tri?n</button>
     </div>
 
     <section class="card">
-        <h2>Phân tích URL</h2>
+        <h2>Ph�n t�ch URL</h2>
 
         <form class="form-inline" onsubmit="return false;" autocomplete="off">
             <input
                 type="text"
                 id="analyzeURL"
-                placeholder="Nhập URL, ví dụ: https://example.com"
+                placeholder="Nh?p URL, v� d?: https://example.com"
                 required
                 autocomplete="off"
                 spellcheck="false"
             >
-            <button type="button" id="analyzeBtn">Phân tích</button>
+            <button type="button" id="analyzeBtn">Ph�n t�ch</button>
         </form>
 
         <div id="analyzeResult"></div>
     </section>
 
     <section class="card">
-        <h2>Đồ thị URL</h2>
+        <h2>�? th? URL</h2>
 
         <div class="graph-controls">
             <select id="sessionSelect"></select>
-            <button id="reloadGraphBtn">Tải lại</button>
+            <button id="reloadGraphBtn">T?i l?i</button>
             <span id="graphLoading" style="display:none;margin-left:8px">Loading...</span>
         </div>
 
         <div id="selectedSessionArea" style="margin-top:8px;">
-            <b>Phiên:</b>
-            <span id="selectedSessionLabel">Tất cả dữ liệu (ALL)</span>
+            <b>Phi�n:</b>
+            <span id="selectedSessionLabel">T?t c? d? li?u (ALL)</span>
         </div>
 
         <div class="graph-wrapper">
@@ -73,17 +73,17 @@
     </section>
 
     <section class="card">
-        <h2>Bảng URL Node</h2>
+        <h2>B?ng URL Node</h2>
 
         <div class="table-search">
             <input
                 type="text"
                 id="searchNode"
-                placeholder="Tìm URL..."
+                placeholder="T?m URL..."
                 autocomplete="off"
                 spellcheck="false"
             >
-            <button type="button" id="searchNodeBtn">Tìm</button>
+            <button type="button" id="searchNodeBtn">T?m</button>
             <button type="button" id="resetNodeBtn">Reset</button>
         </div>
 
@@ -109,7 +109,7 @@
 </main>
 
 <script>
-    // staff-main.js sẽ đọc biến này để filter đúng loại node
+    // staff-main.js s? �?c bi?n n�y �? filter ��ng lo?i node
     window.STAFF_VIEW_TYPE = "URL";
 </script>
 
@@ -118,7 +118,7 @@
 <script th:src="@{/js/staff-url-analyze.js}"></script>
 
 <section class="card">
-    <h2>Bảng Sessions</h2>
+    <h2>B?ng Sessions</h2>
     <div class="table-wrapper">
         <table id="finalTable">
             <thead>

@@ -45,10 +45,14 @@ public class GraphQueryService {
                    coalesce(s.status,'valid') AS status,
                    coalesce(s.riskLevel,'low') AS riskLevel,
                    coalesce(s.riskScore,0) AS riskScore,
-                   coalesce(s.verdict,'AN TOÀN') AS verdict,
+                   coalesce(s.verdict,'AN TO�N') AS verdict,
                    coalesce(s.indicators,[]) AS indicators,
                    '' AS source,
-                   s.id AS sessionId
+                   s.id AS sessionId,
+                   false AS manualBlocked,
+                   '' AS manualBlockReason,
+                   '' AS manualBlockedBy,
+                   '' AS manualBlockedAt
             ORDER BY s.createdAt DESC
         """)
         .fetch().all()
@@ -68,10 +72,14 @@ public class GraphQueryService {
                    coalesce(n.status,'valid') AS status,
                    coalesce(n.riskLevel,'low') AS riskLevel,
                    coalesce(n.riskScore,0) AS riskScore,
-                   coalesce(n.verdict,'AN TOÀN') AS verdict,
+                   coalesce(n.verdict,'AN TO�N') AS verdict,
                    coalesce(n.indicators,[]) AS indicators,
                    coalesce(n.source,'') AS source,
-                   '' AS sessionId
+                   '' AS sessionId,
+                   coalesce(n.manualBlocked,false) AS manualBlocked,
+                   coalesce(n.manualBlockReason,'') AS manualBlockReason,
+                   coalesce(n.manualBlockedBy,'') AS manualBlockedBy,
+                   coalesce(toString(n.manualBlockedAt),'') AS manualBlockedAt
         """)
         .fetch().all()
         .forEach(m -> {
@@ -154,10 +162,14 @@ public class GraphQueryService {
                    coalesce(s.status,'valid') AS status,
                    coalesce(s.riskLevel,'low') AS riskLevel,
                    coalesce(s.riskScore,0) AS riskScore,
-                   coalesce(s.verdict,'AN TOÀN') AS verdict,
+                   coalesce(s.verdict,'AN TO�N') AS verdict,
                    coalesce(s.indicators,[]) AS indicators,
                    '' AS source,
-                   s.id AS sessionId
+                   s.id AS sessionId,
+                   false AS manualBlocked,
+                   '' AS manualBlockReason,
+                   '' AS manualBlockedBy,
+                   '' AS manualBlockedAt
             ORDER BY s.createdAt DESC
         """)
         .bind(sessionIds).to("sids")
@@ -177,10 +189,14 @@ public class GraphQueryService {
                    coalesce(n.status,'valid') AS status,
                    coalesce(n.riskLevel,'low') AS riskLevel,
                    coalesce(n.riskScore,0) AS riskScore,
-                   coalesce(n.verdict,'AN TOÀN') AS verdict,
+                   coalesce(n.verdict,'AN TO�N') AS verdict,
                    coalesce(n.indicators,[]) AS indicators,
                    coalesce(n.source,'') AS source,
-                   s.id AS sessionId
+                   s.id AS sessionId,
+                   coalesce(n.manualBlocked,false) AS manualBlocked,
+                   coalesce(n.manualBlockReason,'') AS manualBlockReason,
+                   coalesce(n.manualBlockedBy,'') AS manualBlockedBy,
+                   coalesce(toString(n.manualBlockedAt),'') AS manualBlockedAt
         """)
         .bind(sessionIds).to("sids")
         .fetch().all()
@@ -227,7 +243,7 @@ public class GraphQueryService {
     public GraphResponseDTO getGraphBySession(String sessionId) {
 
         if (sessionId == null || sessionId.isBlank()) {
-            throw new IllegalArgumentException("sessionId không hợp lệ");
+            throw new IllegalArgumentException("sessionId kh�ng h?p l?");
         }
 
         Map<String, GraphNodeDTO> nodeMap = new LinkedHashMap<>();
@@ -243,16 +259,20 @@ public class GraphQueryService {
                    coalesce(s.status,'valid') AS status,
                    coalesce(s.riskLevel,'low') AS riskLevel,
                    coalesce(s.riskScore,0) AS riskScore,
-                   coalesce(s.verdict,'AN TOÀN') AS verdict,
+                   coalesce(s.verdict,'AN TO�N') AS verdict,
                    coalesce(s.indicators,[]) AS indicators,
                    '' AS source,
-                   s.id AS sessionId
+                   s.id AS sessionId,
+                   false AS manualBlocked,
+                   '' AS manualBlockReason,
+                   '' AS manualBlockedBy,
+                   '' AS manualBlockedAt
         """)
         .bind(sessionId).to("sid")
         .fetch()
         .one()
         .orElseThrow(() ->
-                new IllegalArgumentException("Session không tồn tại")
+                new IllegalArgumentException("Session kh�ng t?n t?i")
         );
 
         GraphNodeDTO sessionNode = mapNode(sessionRow);
@@ -269,10 +289,14 @@ public class GraphQueryService {
                    coalesce(n.status,'valid') AS status,
                    coalesce(n.riskLevel,'low') AS riskLevel,
                    coalesce(n.riskScore,0) AS riskScore,
-                   coalesce(n.verdict,'AN TOÀN') AS verdict,
+                   coalesce(n.verdict,'AN TO�N') AS verdict,
                    coalesce(n.indicators,[]) AS indicators,
                    coalesce(n.source,'') AS source,
-                   s.id AS sessionId
+                   s.id AS sessionId,
+                   coalesce(n.manualBlocked,false) AS manualBlocked,
+                   coalesce(n.manualBlockReason,'') AS manualBlockReason,
+                   coalesce(n.manualBlockedBy,'') AS manualBlockedBy,
+                   coalesce(toString(n.manualBlockedAt),'') AS manualBlockedAt
         """)
         .bind(sessionId).to("sid")
         .fetch().all()
@@ -281,7 +305,7 @@ public class GraphQueryService {
             nodeMap.put(n.getId(), n);
         });
 
-        /* ---------- SESSION → ENTITY LINKS ---------- */
+        /* ---------- SESSION ? ENTITY LINKS ---------- */
         neo4j.query("""
             MATCH (s:AnalysisSession {id: $sid})
                   -[r:HAS_EMAIL|HAS_IP|HAS_URL|HAS_DOMAIN|HAS_FILE|HAS_FILEHASH|HAS_VICTIM]->(n)
@@ -295,8 +319,8 @@ public class GraphQueryService {
         .forEach(m -> addLink(m, links, linkKeySet));
 
         /* ===================================================== */
-        /* ⭐⭐⭐ FIX QUAN TRỌNG NHẤT Ở ĐÂY ⭐⭐⭐                  */
-        /* Chỉ lấy relationship thuộc đúng session             */
+        /* ??? FIX QUAN TR?NG NH?T ? ��Y ???                  */
+        /* Ch? l?y relationship thu?c ��ng session             */
         /* ===================================================== */
 
         neo4j.query("""
@@ -351,10 +375,14 @@ public class GraphQueryService {
                    coalesce(n.status,'valid') AS status,
                    coalesce(n.riskLevel,'low') AS riskLevel,
                    coalesce(n.riskScore,0) AS riskScore,
-                   coalesce(n.verdict,'AN TOÀN') AS verdict,
+                   coalesce(n.verdict,'AN TO�N') AS verdict,
                    coalesce(n.indicators,[]) AS indicators,
                    coalesce(n.source,'') AS source,
-                   '' AS sessionId
+                   '' AS sessionId,
+                   coalesce(n.manualBlocked,false) AS manualBlocked,
+                   coalesce(n.manualBlockReason,'') AS manualBlockReason,
+                   coalesce(n.manualBlockedBy,'') AS manualBlockedBy,
+                   coalesce(toString(n.manualBlockedAt),'') AS manualBlockedAt
         """)
         .bind(nodeId).to("id")
         .bind(newValue).to("val")
@@ -362,7 +390,7 @@ public class GraphQueryService {
         .fetch()
         .one()
         .orElseThrow(() ->
-                new IllegalStateException("Node không tồn tại hoặc đã bị xóa")
+                new IllegalStateException("Node kh�ng t?n t?i ho?c �? b? x�a")
         );
 
         return mapNode(result);
@@ -386,9 +414,114 @@ public class GraphQueryService {
         .bind(nodeId).to("id")
         .fetch()
         .one()
-        .orElseThrow(() -> new IllegalStateException("Node không tồn tại hoặc đã bị xóa"));
+        .orElseThrow(() -> new IllegalStateException("Node kh�ng t?n t?i ho?c �? b? x�a"));
 
         // deletion executed; nothing to return
+    }
+
+    /* ===================================================== */
+    /* MANUAL BLOCK / UNBLOCK                                */
+    /* ===================================================== */
+
+    @Transactional("transactionManager")
+    public GraphNodeDTO blockNode(String nodeId, String reason, String blockedBy) {
+
+        String indicator = "MANUAL_BLOCK" + (reason != null && !reason.isBlank() ? (": " + reason.trim()) : "");
+
+        Map<String, Object> result = neo4j.query("""
+            MATCH (n)
+            WHERE elementId(n) = $id
+              AND coalesce(n.deleted,false) = false
+            WITH n, coalesce(n.manualBlocked,false) AS wasBlocked
+            SET n.manualPrevRiskScore = CASE WHEN wasBlocked THEN n.manualPrevRiskScore ELSE coalesce(n.riskScore,0) END,
+                n.manualPrevRiskLevel = CASE WHEN wasBlocked THEN n.manualPrevRiskLevel ELSE coalesce(n.riskLevel,'low') END,
+                n.manualPrevStatus = CASE WHEN wasBlocked THEN n.manualPrevStatus ELSE coalesce(n.status,'valid') END,
+                n.manualPrevVerdict = CASE WHEN wasBlocked THEN n.manualPrevVerdict ELSE coalesce(n.verdict,'') END,
+                n.manualBlocked = true,
+                n.manualBlockReason = $reason,
+                n.manualBlockedAt = datetime(),
+                n.manualBlockedBy = $by,
+                n.riskScore = 100,
+                n.riskLevel = 'high',
+                n.status = 'fake',
+                n.verdict = 'BLOCK',
+                n.indicators = CASE
+                    WHEN $ind IS NULL OR $ind = '' THEN coalesce(n.indicators,[])
+                    ELSE coalesce(n.indicators,[]) + [$ind]
+                END,
+                n.updatedAt = datetime(),
+                n.updatedBy = $by
+            RETURN elementId(n) AS id,
+                   labels(n)[0] AS type,
+                   coalesce(n.email,n.ip,n.url,n.domain,n.fileName,n.hash,n.username,n.account) AS value,
+                   coalesce(n.status,'valid') AS status,
+                   coalesce(n.riskLevel,'low') AS riskLevel,
+                   coalesce(n.riskScore,0) AS riskScore,
+                   coalesce(n.verdict,'AN TOÀN') AS verdict,
+                   coalesce(n.indicators,[]) AS indicators,
+                   coalesce(n.source,'') AS source,
+                   '' AS sessionId,
+                   coalesce(n.manualBlocked,false) AS manualBlocked,
+                   coalesce(n.manualBlockReason,'') AS manualBlockReason,
+                   coalesce(n.manualBlockedBy,'') AS manualBlockedBy,
+                   coalesce(toString(n.manualBlockedAt),'') AS manualBlockedAt
+        """)
+        .bind(nodeId).to("id")
+        .bind(reason).to("reason")
+        .bind(blockedBy).to("by")
+        .bind(indicator).to("ind")
+        .fetch()
+        .one()
+        .orElseThrow(() -> new IllegalStateException("Node không tồn tại hoặc đã bị xóa"));
+
+        return mapNode(result);
+    }
+
+    @Transactional("transactionManager")
+    public GraphNodeDTO unblockNode(String nodeId, String unblockedBy) {
+
+        Map<String, Object> result = neo4j.query("""
+            MATCH (n)
+            WHERE elementId(n) = $id
+              AND coalesce(n.deleted,false) = false
+            SET n.riskScore = coalesce(n.manualPrevRiskScore, n.riskScore),
+                n.riskLevel = coalesce(n.manualPrevRiskLevel, n.riskLevel),
+                n.status = coalesce(n.manualPrevStatus, n.status),
+                n.verdict = coalesce(n.manualPrevVerdict, n.verdict),
+                n.manualPrevRiskScore = null,
+                n.manualPrevRiskLevel = null,
+                n.manualPrevStatus = null,
+                n.manualPrevVerdict = null,
+                n.manualBlocked = false,
+                n.manualBlockReason = null,
+                n.manualBlockedAt = null,
+                n.manualBlockedBy = null,
+                n.manualUnblockedAt = datetime(),
+                n.manualUnblockedBy = $by,
+                n.updatedAt = datetime(),
+                n.updatedBy = $by
+            RETURN elementId(n) AS id,
+                   labels(n)[0] AS type,
+                   coalesce(n.email,n.ip,n.url,n.domain,n.fileName,n.hash,n.username,n.account) AS value,
+                   coalesce(n.status,'valid') AS status,
+                   coalesce(n.riskLevel,'low') AS riskLevel,
+                   coalesce(n.riskScore,0) AS riskScore,
+                   coalesce(n.verdict,'AN TOÀN') AS verdict,
+                   coalesce(n.indicators,[]) AS indicators,
+                   coalesce(n.source,'') AS source,
+                   '' AS sessionId,
+                   coalesce(n.manualBlocked,false) AS manualBlocked,
+                   coalesce(n.manualBlockReason,'') AS manualBlockReason,
+                   coalesce(n.manualBlockedBy,'') AS manualBlockedBy,
+                   coalesce(toString(n.manualBlockedAt),'') AS manualBlockedAt
+        """)
+        .bind(nodeId).to("id")
+        .bind(unblockedBy).to("by")
+        .fetch()
+        .one()
+        .orElseThrow(() -> new IllegalStateException("Node không tồn tại hoặc đã bị xóa"));
+
+        return mapNode(result);
     }
 
     /* ===================================================== */
@@ -419,7 +552,11 @@ public class GraphQueryService {
                 safeInt(m.get("riskScore")),
                 safeStr(m.get("verdict")),
                 castToStringList(m.get("indicators")),
-                safeStr(m.get("source"))
+                safeStr(m.get("source")),
+                safeBool(m.get("manualBlocked")),
+                safeStr(m.get("manualBlockReason")),
+                safeStr(m.get("manualBlockedBy")),
+                safeStr(m.get("manualBlockedAt"))
         );
     }
 
@@ -449,6 +586,13 @@ public class GraphQueryService {
     private static int safeInt(Object o) {
         if (o instanceof Number n) return n.intValue();
         return 0;
+    }
+
+    private static boolean safeBool(Object o) {
+        if (o instanceof Boolean b) return b;
+        if (o instanceof Number n) return n.intValue() != 0;
+        if (o == null) return false;
+        return Boolean.parseBoolean(o.toString());
     }
 
     private static List<String> castToStringList(Object obj) {

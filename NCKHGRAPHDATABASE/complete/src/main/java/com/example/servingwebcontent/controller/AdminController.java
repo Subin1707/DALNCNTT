@@ -382,6 +382,44 @@ public class AdminController {
         }
     }
 
+    @PostMapping("/node/{nodeId}/block")
+    @ResponseBody
+    public ResponseEntity<?> blockNode(@PathVariable String nodeId,
+                                       @RequestBody(required = false) Map<String, String> body,
+                                       HttpSession session) {
+
+        User admin = getAdmin(session);
+        String reason = body != null ? body.get("reason") : null;
+
+        try {
+            var node = graphService.blockNode(nodeId, reason, admin.getEmail());
+            return ResponseEntity.ok(Map.of("success", true, "node", node));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "success", false,
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    @PostMapping("/node/{nodeId}/unblock")
+    @ResponseBody
+    public ResponseEntity<?> unblockNode(@PathVariable String nodeId,
+                                         HttpSession session) {
+
+        User admin = getAdmin(session);
+
+        try {
+            var node = graphService.unblockNode(nodeId, admin.getEmail());
+            return ResponseEntity.ok(Map.of("success", true, "node", node));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "success", false,
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
     /* ================= HELPER ================= */
     private User getAdmin(HttpSession session) {
         if (session == null) {
@@ -418,6 +456,34 @@ public class AdminController {
         return "admin/admin-url";
     }
 
+    @GetMapping("/admin-domain")
+    public String adminDomain(HttpSession session, Model model) {
+        User admin = getAdmin(session);
+        model.addAttribute("user", admin);
+        return "admin/admin-domain";
+    }
+
+    @GetMapping("/admin-file")
+    public String adminFile(HttpSession session, Model model) {
+        User admin = getAdmin(session);
+        model.addAttribute("user", admin);
+        return "admin/admin-file";
+    }
+
+    @GetMapping("/admin-filehash")
+    public String adminFileHash(HttpSession session, Model model) {
+        User admin = getAdmin(session);
+        model.addAttribute("user", admin);
+        return "admin/admin-filehash";
+    }
+
+    @GetMapping("/admin-victim")
+    public String adminVictim(HttpSession session, Model model) {
+        User admin = getAdmin(session);
+        model.addAttribute("user", admin);
+        return "admin/admin-victim";
+    }
+
     @GetMapping("/user-management")
     public String userManagement(HttpSession session, Model model) {
         User admin = getAdmin(session);
@@ -438,7 +504,5 @@ public String logout(HttpSession session) {
     if (session != null) session.invalidate();
     return "redirect:/login";
 }}
-
-
 
 

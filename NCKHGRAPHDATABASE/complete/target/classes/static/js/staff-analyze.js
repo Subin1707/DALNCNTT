@@ -15,6 +15,8 @@ document.addEventListener("DOMContentLoaded", () => {
         if (type === "Email") return value.toLowerCase();
         if (type === "IPAddress") return value.replace(/[^0-9.]/g, "");
         if (type === "URL") return value.replace(/\s+/g, "");
+        if (type === "Domain") return value.toLowerCase();
+        if (type === "FileHash") return value.toLowerCase().replace(/\s+/g, "");
         return value;
     }
 
@@ -28,19 +30,31 @@ document.addEventListener("DOMContentLoaded", () => {
         const emailRaw = document.getElementById("analyzeEmail")?.value?.trim() || "";
         const ipRaw    = document.getElementById("analyzeIP")?.value?.trim() || "";
         const urlRaw   = document.getElementById("analyzeURL")?.value?.trim() || "";
+        const domainRaw = document.getElementById("analyzeDomain")?.value?.trim() || "";
+        const fileNodeRaw = document.getElementById("analyzeFileNode")?.value?.trim() || "";
+        const fileHashRaw = document.getElementById("analyzeFileHash")?.value?.trim() || "";
+        const victimRaw = document.getElementById("analyzeVictimAccount")?.value?.trim() || "";
 
         const email = normalize("Email", emailRaw);
         const ip    = normalize("IPAddress", ipRaw);
         const url   = normalize("URL", urlRaw);
+        const domain = normalize("Domain", domainRaw);
+        const fileNode = normalize("File", fileNodeRaw);
+        const fileHash = normalize("FileHash", fileHashRaw);
+        const victimAccount = normalize("VictimAccount", victimRaw);
 
-        if (!email && !ip && !url) {
-            return alert("Vui lòng nhập Email, IP hoặc URL để phân tích!");
+        if (!email && !ip && !url && !domain && !fileNode && !fileHash && !victimAccount) {
+            return alert("Vui lòng nhập ít nhất 1 trong: Email / IP / URL / Domain / File name / File hash / Victim account");
         }
 
         const payload = {};
         if (email) payload.email = email;
         if (ip) payload.ip = ip;
         if (url) payload.url = url;
+        if (domain) payload.domain = domain;
+        if (fileNode) payload.fileNode = fileNode;
+        if (fileHash) payload.fileHash = fileHash;
+        if (victimAccount) payload.victimAccount = victimAccount;
 
         try {
             if (resultDiv) {
@@ -114,6 +128,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (email && nodes.some(n => normalize(n.type, n.value) === email)) valuesToHighlight.push(email);
                 if (ip && nodes.some(n => normalize(n.type, n.value) === ip)) valuesToHighlight.push(ip);
                 if (url && nodes.some(n => normalize(n.type, n.value) === url)) valuesToHighlight.push(url);
+                if (domain && nodes.some(n => normalize(n.type, n.value) === domain)) valuesToHighlight.push(domain);
+                if (fileNode && nodes.some(n => normalize(n.type, n.value) === fileNode)) valuesToHighlight.push(fileNode);
+                if (fileHash && nodes.some(n => normalize(n.type, n.value) === fileHash)) valuesToHighlight.push(fileHash);
+                if (victimAccount && nodes.some(n => normalize(n.type, n.value) === victimAccount)) valuesToHighlight.push(victimAccount);
 
                 window.highlightNodeValues(valuesToHighlight);
             }

@@ -13,6 +13,8 @@ document.addEventListener("DOMContentLoaded", () => {
         if (type === "email") return value.toLowerCase();
         if (type === "url")   return value.toLowerCase().replace(/\s+/g, "");
         if (type === "ip")    return value.replace(/[^0-9.]/g, "");
+        if (type === "domain") return value.toLowerCase();
+        if (type === "fileHash") return value.toLowerCase().replace(/\s+/g, "");
         return value;
     }
 
@@ -33,9 +35,13 @@ document.addEventListener("DOMContentLoaded", () => {
         const email = normalizeInput("email", document.getElementById("analyzeEmail")?.value);
         const ip    = normalizeInput("ip",    document.getElementById("analyzeIP")?.value);
         const url   = normalizeInput("url",   document.getElementById("analyzeURL")?.value);
+        const domain = normalizeInput("domain", document.getElementById("analyzeDomain")?.value);
+        const fileNode = normalizeInput("fileNode", document.getElementById("analyzeFileNode")?.value);
+        const fileHash = normalizeInput("fileHash", document.getElementById("analyzeFileHash")?.value);
+        const victimAccount = normalizeInput("victimAccount", document.getElementById("analyzeVictimAccount")?.value);
 
-        if (!email && !ip && !url) {
-            alert("Vui lòng nhập Email, IP hoặc URL để phân tích!");
+        if (!email && !ip && !url && !domain && !fileNode && !fileHash && !victimAccount) {
+            alert("Vui lòng nhập ít nhất 1 trong: Email / IP / URL / Domain / File name / File hash / Victim account");
             return;
         }
 
@@ -43,8 +49,12 @@ document.addEventListener("DOMContentLoaded", () => {
         if (email) payload.email = email;
         if (ip)    payload.ip    = ip;
         if (url)   payload.url   = url;
+        if (domain) payload.domain = domain;
+        if (fileNode) payload.fileNode = fileNode;
+        if (fileHash) payload.fileHash = fileHash;
+        if (victimAccount) payload.victimAccount = victimAccount;
 
-        const highlightValues = [email, ip, url].filter(Boolean);
+        const highlightValues = [email, ip, url, domain, fileNode, fileHash, victimAccount].filter(Boolean);
 
         try {
 
@@ -165,7 +175,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             if (typeof window.fetchGraph === "function") {
-                await window.fetchGraph(sessionId, highlightValues[0] || null);
+                await window.fetchGraph(sessionId, { force: true });
             }
 
         } catch (err) {
