@@ -2,6 +2,7 @@
 <html lang="vi" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Admin Dashboard</title>
 
     <link rel="stylesheet" th:href="@{/css/admin.css}">
@@ -104,13 +105,14 @@
     <section class="card">
         <h2>Đồ thị gian lận</h2>
 
-        <div style="display:flex;gap:10px;align-items:center;margin:10px 0;">
+        <div class="graph-controls">
             <label for="sessionSelect"><b>Phiên:</b></label>
-            <select id="sessionSelect" style="min-width:380px;padding:8px">
+            <select id="sessionSelect" style="min-width:380px">
                 <option value="">ALL SESSIONS</option>
             </select>
 
             <button type="button" id="reloadGraphBtn">Tải lại</button>
+            <span id="graphLoading" style="display:none;margin-left:8px">Loading...</span>
         </div>
 
         <p class="note">
@@ -166,16 +168,16 @@
 /* ================= SAFE UI BINDINGS ================= */
 
 window.addEventListener("load", () => {
-    window.fetchGraph?.();
+    window.fetchGraph?.(null, { force: true });
 });
 
 document.getElementById("reloadGraphBtn")?.addEventListener("click", () => {
     const sessionId = document.getElementById("sessionSelect")?.value || null;
-    window.fetchGraph?.(sessionId);
+    window.fetchGraph?.(sessionId, { force: true });
 });
 
 document.getElementById("sessionSelect")?.addEventListener("change", e => {
-    window.fetchGraph?.(e.target.value || null);
+    window.fetchGraph?.(e.target.value || null, { force: true });
 });
 </script>
 
