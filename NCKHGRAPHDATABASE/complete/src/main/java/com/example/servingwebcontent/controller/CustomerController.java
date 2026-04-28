@@ -319,7 +319,7 @@ public class CustomerController {
 
     /* ================= DECISION API ================= */
 
-    @PostMapping("/node-decision")
+    @RequestMapping(value = "/node-decision", method = {RequestMethod.GET, RequestMethod.POST})
     @ResponseBody
     public ResponseEntity<?> getNodeDecision(
             @RequestParam String nodeId,
@@ -347,7 +347,7 @@ public class CustomerController {
 
     /* ================= CHATBOT API (4 Layers) ================= */
 
-    @PostMapping("/node-analysis")
+    @RequestMapping(value = "/node-analysis", method = {RequestMethod.GET, RequestMethod.POST})
     @ResponseBody
     public ResponseEntity<?> analyzeNode(
             @RequestParam String nodeId,

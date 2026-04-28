@@ -31,6 +31,9 @@ public class AdminController {
     private final UserService userService;   // ✅ THÊM
     private final PacketCaptureService packetCaptureService;
     private final GraphUpdateBroadcaster graphUpdateBroadcaster;
+    private final DecisionService decisionService;
+    private final EnhancedChatbotService chatbotService;
+    private final AlertLoggingService alertLoggingService;
 
     public AdminController(AnalysisSessionService analysisSessionService,
                            GraphQueryService graphService,
@@ -38,7 +41,10 @@ public class AdminController {
                            AnalysisSessionRepository sessionRepository,
                            UserService userService,
                            PacketCaptureService packetCaptureService,
-                           GraphUpdateBroadcaster graphUpdateBroadcaster) {  // ✅ THÊM
+                           GraphUpdateBroadcaster graphUpdateBroadcaster,
+                           DecisionService decisionService,
+                           EnhancedChatbotService chatbotService,
+                           AlertLoggingService alertLoggingService) {  // ✅ THÊM
 
         this.analysisSessionService = analysisSessionService;
         this.graphService = graphService;
@@ -47,6 +53,9 @@ public class AdminController {
         this.userService = userService;     // ✅ THÊM
         this.packetCaptureService = packetCaptureService;
         this.graphUpdateBroadcaster = graphUpdateBroadcaster;
+        this.decisionService = decisionService;
+        this.chatbotService = chatbotService;
+        this.alertLoggingService = alertLoggingService;
     }
 
     /* ================= DASHBOARD ================= */
@@ -524,8 +533,87 @@ public class AdminController {
         return "admin/about";
     }
 
-@PostMapping("/logout")
-public String logout(HttpSession session) {
-    if (session != null) session.invalidate();
-    return "redirect:/login";
-}}
+    @RequestMapping(value = "/node-decision", method = {RequestMethod.GET, RequestMethod.POST})
+    @ResponseBody
+    public ResponseEntity<?> getNodeDecision(
+            @RequestParam String nodeId,
+            @RequestParam String nodeType,
+            @RequestParam String nodeValue,
+            @RequestParam String riskLevel,
+            @RequestParam(defaultValue = "0") int riskScore,
+            HttpSession session) {
+        try {
+            getAdmin(session);
+            DecisionDTO decision = decisionService.makeDecision(riskScore, riskLevel);
+            alertLoggingService.logAlert(nodeId, nodeType, nodeValue, riskLevel, riskScore, decision.getDecision());
+            return ResponseEntity.ok(decision);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of(
+                    "success", false,
+                    "message", "Error generating decision: " + e.getMessage()
+            ));
+        }
+    }
+
+    @RequestMapping(value = "/node-analysis", method = {RequestMethod.GET, RequestMethod.POST})
+    @ResponseBody
+    public ResponseEntity<?> analyzeNode(
+            @RequestParam String nodeId,
+            @RequestParam String nodeType,
+            @RequestParam String nodeValue,
+            @RequestParam String riskLevel,
+            @RequestParam(defaultValue = "0") int riskScore,
+            HttpSession session) {
+        try {
+            getAdmin(session);
+            List<String> indicators = resolveNodeIndicators(nodeId);
+            ChatbotResponseDTO chatbotResponse = chatbotService.generateAnalysis(
+                    nodeId, nodeType, nodeValue, riskLevel, riskScore, indicators
+            );
+
+            alertLoggingService.logDetection(
+                    nodeId,
+                    nodeType,
+                    nodeValue,
+                    riskLevel,
+                    chatbotResponse.getAnalysisDescription(),
+                    chatbotResponse.getThreatExplanation(),
+                    chatbotResponse.getRelatedNodes() != null
+                            ? chatbotResponse.getRelatedNodes().stream()
+                            .map(ChatbotResponseDTO.RelatedNodeDTO::getNodeId)
+                            .toList()
+                            : new ArrayList<>()
+            );
+
+            return ResponseEntity.ok(chatbotResponse);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of(
+                    "success", false,
+                    "message", "Error analyzing node: " + e.getMessage()
+            ));
+        }
+    }
+
+    private List<String> resolveNodeIndicators(String nodeId) {
+        try {
+            GraphResponseDTO graph = graphService.getGraph();
+            if (graph == null || graph.getNodes() == null) {
+                return new ArrayList<>();
+            }
+
+            return graph.getNodes().stream()
+                    .filter(node -> nodeId.equals(node.getId()))
+                    .findFirst()
+                    .map(node -> node.getIndicators() != null ? new ArrayList<>(node.getIndicators()) : new ArrayList<String>())
+                    .orElseGet(ArrayList::new);
+        } catch (Exception ignored) {
+            return new ArrayList<>();
+        }
+    }
+
+    @RequestMapping(value = "/logout", method = {RequestMethod.GET, RequestMethod.POST})
+    public String logout(HttpSession session) {
+        if (session != null) session.invalidate();
+        return "redirect:/login";
+    }
+}

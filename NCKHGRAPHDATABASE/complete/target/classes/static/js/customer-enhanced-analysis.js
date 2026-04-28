@@ -15,14 +15,22 @@ async function enhancedShowNodeInfo(d) {
     try {
         // Fetch decision
         const decisionRes = await fetch(
-            `/customer/node-decision?nodeId=${d.id}&nodeType=${d.type}&nodeValue=${encodeURIComponent(d.value)}&riskLevel=${d.riskLevel}&riskScore=${d.riskScore}`
+            `/customer/node-decision?nodeId=${d.id}&nodeType=${d.type}&nodeValue=${encodeURIComponent(d.value)}&riskLevel=${d.riskLevel}&riskScore=${d.riskScore}`,
+            { method: "POST" }
         );
+        if (!decisionRes.ok) {
+            throw new Error(`Decision request failed: HTTP ${decisionRes.status}`);
+        }
         const decision = await decisionRes.json();
 
         // Fetch chatbot analysis
         const chatbotRes = await fetch(
-            `/customer/node-analysis?nodeId=${d.id}&nodeType=${d.type}&nodeValue=${encodeURIComponent(d.value)}&riskLevel=${d.riskLevel}&riskScore=${d.riskScore}`
+            `/customer/node-analysis?nodeId=${d.id}&nodeType=${d.type}&nodeValue=${encodeURIComponent(d.value)}&riskLevel=${d.riskLevel}&riskScore=${d.riskScore}`,
+            { method: "POST" }
         );
+        if (!chatbotRes.ok) {
+            throw new Error(`Analysis request failed: HTTP ${chatbotRes.status}`);
+        }
         const chatbot = await chatbotRes.json();
 
         // Render the complete UI

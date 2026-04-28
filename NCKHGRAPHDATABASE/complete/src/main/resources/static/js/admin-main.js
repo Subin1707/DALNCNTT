@@ -492,7 +492,11 @@ window.fetchGraph = fetchGraph;
                 event?.stopPropagation?.();
                 selectedNodeId = d?.id || null;
                 applyRelationHighlight(selectedNodeId);
-                showNodeInfo(d);
+                if (typeof window.enhancedShowNodeInfo === "function") {
+                    window.enhancedShowNodeInfo(d);
+                } else {
+                    showNodeInfo(d);
+                }
             })
             .call(d3.drag()
                 .on("start", e => {
@@ -587,7 +591,13 @@ window.fetchGraph = fetchGraph;
                 .filter(n => n.type === "Domain" || n.type === "URL")
                 .sort((a, b) => (b._newAt || 0) - (a._newAt || 0))[0];
             if (newest) {
-                setTimeout(() => showNodeInfo(newest), 450);
+                setTimeout(() => {
+                    if (typeof window.enhancedShowNodeInfo === "function") {
+                        window.enhancedShowNodeInfo(newest);
+                    } else {
+                        showNodeInfo(newest);
+                    }
+                }, 450);
             }
         }
 
@@ -1018,7 +1028,13 @@ if (riskRank(normalizedRisk) > riskRank(s.maxRisk))
 
             const viewBtn = document.createElement("button");
             viewBtn.textContent = "Xem";
-            viewBtn.onclick = () => showNodeInfo(n);
+            viewBtn.onclick = () => {
+                if (typeof window.enhancedShowNodeInfo === "function") {
+                    window.enhancedShowNodeInfo(n);
+                } else {
+                    showNodeInfo(n);
+                }
+            };
             act.appendChild(viewBtn);
 
             const editBtn = document.createElement("button");

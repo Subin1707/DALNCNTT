@@ -267,7 +267,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 event?.stopPropagation?.();
                 selectedNodeId = d?.id || null;
                 applyHighlight();
-                showNodeInfo(d);
+                if (typeof window.enhancedShowNodeInfo === "function") {
+                    window.enhancedShowNodeInfo(d);
+                } else {
+                    showNodeInfo(d);
+                }
             });
 
         const label = container.append("g")
