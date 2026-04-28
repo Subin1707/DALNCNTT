@@ -261,7 +261,12 @@ const zoom = d3.zoom()
                 event.stopPropagation();   // ngăn zoom bắt click
                 selectedNodeId = d?.id || null;
                 applyHighlight();
-                showNodeInfo(d);
+                // Use enhanced analysis instead of simple showNodeInfo
+                if (typeof window.enhancedShowNodeInfo === 'function') {
+                    window.enhancedShowNodeInfo(d);
+                } else {
+                    showNodeInfo(d);
+                }
             });
             node.on("mousedown.zoom", null);
         const label = container.append("g")

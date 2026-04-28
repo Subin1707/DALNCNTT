@@ -32,17 +32,26 @@ public class CustomerController {
     private final AnalysisSessionService analysisSessionService;
     private final ExcelImportService excelImportService;
     private final AnalysisSessionRepository sessionRepository;
+    private final com.example.servingwebcontent.service.DecisionService decisionService;
+    private final com.example.servingwebcontent.service.EnhancedChatbotService chatbotService;
+    private final com.example.servingwebcontent.service.AlertLoggingService alertLoggingService;
 
         public CustomerController(FraudAnalysisService analysisService,
                   GraphQueryService graphService,
                   AnalysisSessionService analysisSessionService,
                   ExcelImportService excelImportService,
-                  AnalysisSessionRepository sessionRepository) {
+                  AnalysisSessionRepository sessionRepository,
+                  com.example.servingwebcontent.service.DecisionService decisionService,
+                  com.example.servingwebcontent.service.EnhancedChatbotService chatbotService,
+                  com.example.servingwebcontent.service.AlertLoggingService alertLoggingService) {
         this.analysisService = analysisService;
         this.graphService = graphService;
         this.analysisSessionService = analysisSessionService;
         this.excelImportService = excelImportService;
         this.sessionRepository = sessionRepository;
+        this.decisionService = decisionService;
+        this.chatbotService = chatbotService;
+        this.alertLoggingService = alertLoggingService;
         }
 
         /* ================= BULK EXCEL UPLOAD (CUSTOMER) ================= */
@@ -306,6 +315,157 @@ public class CustomerController {
         User customer = getCustomer(session);
         model.addAttribute("user", customer);
         return "customer/about";
+    }
+
+    /* ================= DECISION API ================= */
+
+    @PostMapping("/node-decision")
+    @ResponseBody
+    public ResponseEntity<?> getNodeDecision(
+            @RequestParam String nodeId,
+            @RequestParam String nodeType,
+            @RequestParam String nodeValue,
+            @RequestParam String riskLevel,
+            @RequestParam(defaultValue = "0") int riskScore,
+            HttpSession session) {
+        try {
+            User customer = getCustomer(session);
+
+            DecisionDTO decision = decisionService.makeDecision(riskScore, riskLevel);
+
+            // Log the alert
+            alertLoggingService.logAlert(nodeId, nodeType, nodeValue, riskLevel, riskScore, decision.getDecision());
+
+            return ResponseEntity.ok(decision);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of(
+                    "success", false,
+                    "message", "Error generating decision: " + e.getMessage()
+            ));
+        }
+    }
+
+    /* ================= CHATBOT API (4 Layers) ================= */
+
+    @PostMapping("/node-analysis")
+    @ResponseBody
+    public ResponseEntity<?> analyzeNode(
+            @RequestParam String nodeId,
+            @RequestParam String nodeType,
+            @RequestParam String nodeValue,
+            @RequestParam String riskLevel,
+            @RequestParam(defaultValue = "0") int riskScore,
+            HttpSession session) {
+        try {
+            User customer = getCustomer(session);
+
+            // Get indicators from analysis
+            List<String> indicators = new ArrayList<>();
+            
+            ChatbotResponseDTO chatbotResponse = chatbotService.generateAnalysis(
+                    nodeId, nodeType, nodeValue, riskLevel, riskScore, indicators
+            );
+
+            // Log detection
+            alertLoggingService.logDetection(
+                    nodeId,
+                    nodeType,
+                    nodeValue,
+                    riskLevel,
+                    chatbotResponse.getAnalysisDescription(),
+                    chatbotResponse.getThreatExplanation(),
+                    chatbotResponse.getRelatedNodes() != null
+                            ? chatbotResponse.getRelatedNodes().stream()
+                            .map(ChatbotResponseDTO.RelatedNodeDTO::getNodeId)
+                            .toList()
+                            : new ArrayList<>()
+            );
+
+            return ResponseEntity.ok(chatbotResponse);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).body(Map.of(
+                    "success", false,
+                    "message", "Error analyzing node: " + e.getMessage()
+            ));
+        }
+    }
+
+    /* ================= LOGS API ================= */
+
+    @GetMapping("/alerts")
+    @ResponseBody
+    public ResponseEntity<?> getAlerts(
+            @RequestParam(required = false) String riskLevel,
+            @RequestParam(required = false) String decision,
+            @RequestParam(defaultValue = "10") int limit,
+            HttpSession session) {
+        try {
+            User customer = getCustomer(session);
+
+            List<?> alerts;
+            if (riskLevel != null && !riskLevel.isEmpty()) {
+                alerts = alertLoggingService.getAlertsByRiskLevel(riskLevel);
+            } else if (decision != null && !decision.isEmpty()) {
+                alerts = alertLoggingService.getAlertsByDecision(decision);
+            } else {
+                alerts = alertLoggingService.getRecentAlerts(limit);
+            }
+
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "count", alerts.size(),
+                    "alerts", alerts
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of(
+                    "success", false,
+                    "message", "Error retrieving alerts: " + e.getMessage()
+            ));
+        }
+    }
+
+    @GetMapping("/detections")
+    @ResponseBody
+    public ResponseEntity<?> getDetections(
+            @RequestParam(defaultValue = "10") int limit,
+            HttpSession session) {
+        try {
+            User customer = getCustomer(session);
+
+            List<?> detections = alertLoggingService.getRecentDetections(limit);
+
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "count", detections.size(),
+                    "detections", detections
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of(
+                    "success", false,
+                    "message", "Error retrieving detections: " + e.getMessage()
+            ));
+        }
+    }
+
+    @GetMapping("/log-statistics")
+    @ResponseBody
+    public ResponseEntity<?> getLogStatistics(HttpSession session) {
+        try {
+            User customer = getCustomer(session);
+
+            Map<String, Object> stats = alertLoggingService.getStatistics();
+
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "statistics", stats
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of(
+                    "success", false,
+                    "message", "Error retrieving statistics: " + e.getMessage()
+            ));
+        }
     }
 
     /* ================= LOGOUT ================= */
